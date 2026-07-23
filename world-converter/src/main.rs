@@ -1,4 +1,5 @@
 mod nbt_io;
+mod palette;
 mod region;
 
 #[tokio::main]
