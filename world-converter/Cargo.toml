@@ -18,6 +18,7 @@ pumpkin-data = { workspace = true, features = ["default"] }
 
 bytes.workspace = true
 flate2.workspace = true
+lz4-java-wrc.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
