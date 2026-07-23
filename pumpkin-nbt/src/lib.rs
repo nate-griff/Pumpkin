@@ -825,6 +825,71 @@ mod test {
         assert_eq!(bytes, expected_bytes);
     }
 
+    /// A `TAG_List` whose elements are themselves NBT arrays (e.g.
+    /// `List<IntArray>`). Vanilla uses exactly this shape for vault block
+    /// entities' `rewarded_players` field (a list of player UUIDs, each
+    /// stored as a 4-int array) - reachable only through the generic
+    /// `NbtTag` tree (not a typed `#[serde(serialize_with = ...)]` field),
+    /// since that's how untyped/passthrough NBT data (like block entities)
+    /// is represented.
+    ///
+    /// Writes via `serializer::to_bytes` (the serde-generic path, which is
+    /// what `ChunkData::internal_to_bytes` uses to save chunks - the actual
+    /// path this test exists to guard) and reads back via `Nbt::read` (the
+    /// direct, non-serde path chunk *loading* uses) since that's the read
+    /// path this data actually round-trips through in the real server.
+    #[test]
+    fn list_of_int_arrays_round_trips() {
+        use crate::Nbt;
+        use crate::deserializer::NbtReadHelperJava;
+
+        let mut root = NbtCompound::new();
+        root.put_list(
+            "rewarded_players",
+            vec![
+                NbtTag::IntArray(vec![1, 2, 3, 4]),
+                NbtTag::IntArray(vec![5, 6, 7, 8]),
+            ],
+        );
+
+        let mut bytes = Vec::new();
+        to_bytes(&root, &mut bytes).unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        let mut reader = NbtReadHelperJava::new(&mut cursor);
+        let recreated = Nbt::read(&mut reader).unwrap().root_tag;
+        let palette = recreated.get_list("rewarded_players").unwrap();
+        assert_eq!(
+            palette,
+            &[
+                NbtTag::IntArray(vec![1, 2, 3, 4]),
+                NbtTag::IntArray(vec![5, 6, 7, 8]),
+            ]
+        );
+    }
+
+    /// Same shape, but a single-element list - the case that only exercises
+    /// the `FirstListElement` transition (no second element ever hits the
+    /// no-op `ListElement` path), which is exactly what vanilla's vaults
+    /// produce in practice.
+    #[test]
+    fn single_element_list_of_int_array_round_trips() {
+        use crate::Nbt;
+        use crate::deserializer::NbtReadHelperJava;
+
+        let mut root = NbtCompound::new();
+        root.put_list("rewarded_players", vec![NbtTag::IntArray(vec![9, 8, 7, 6])]);
+
+        let mut bytes = Vec::new();
+        to_bytes(&root, &mut bytes).unwrap();
+
+        let mut cursor = Cursor::new(bytes);
+        let mut reader = NbtReadHelperJava::new(&mut cursor);
+        let recreated = Nbt::read(&mut reader).unwrap().root_tag;
+        let palette = recreated.get_list("rewarded_players").unwrap();
+        assert_eq!(palette, &[NbtTag::IntArray(vec![9, 8, 7, 6])]);
+    }
+
     #[test]
     fn nbt_arrays_bedrock() {
         #[derive(Serialize)]

@@ -212,23 +212,32 @@ enum State {
     Named(String),
     // Used by maps to check if key is a `String`.
     MapKey,
-    FirstListElement {
-        len: i32,
-    },
+    FirstListElement { len: i32 },
     ListElement,
     CheckedListElement,
-    Array {
-        name: String,
-        array_type: &'static str,
-    },
+    // Entered only via `serialize_newtype_variant`, which has already
+    // written this array's own tag (and name, or enclosing list header -
+    // whatever the state we arrived from called for) through `parse_state`.
+    // All that's left is this array's own `[length][elements...]` body,
+    // written by `serialize_seq` below.
+    Array { array_type: &'static str },
 }
 
 impl<W: NbtWriteHelper> Serializer<W> {
     fn parse_state(&mut self, tag: u8) -> Result<()> {
         match &mut self.state {
-            State::Named(name) | State::Array { name, .. } => {
+            State::Named(name) => {
                 self.output.write_u8(tag)?;
                 self.output.write_string(name)?;
+            }
+            State::Array { .. } => {
+                // `serialize_seq`'s array branch writes this array's body
+                // directly and never calls `parse_state` again once here -
+                // the header was already written by whichever state
+                // `serialize_newtype_variant` found us in.
+                return Err(Error::SerdeError(
+                    "Invalid `Serializer` state: array body reached `parse_state`".to_string(),
+                ));
             }
             State::FirstListElement { len } => {
                 self.output.write_u8(tag)?;
@@ -460,13 +469,34 @@ impl<W: NbtWriteHelper> ser::Serializer for &mut Serializer<W> {
         value: &T,
     ) -> Result<()> {
         if name == NBT_ARRAY_TAG {
-            let name = match self.state {
-                State::Named(ref name) => name.clone(),
-                _ => return Err(Error::SerdeError("Invalid `Serializer` state!".to_string())),
+            let id = match variant {
+                NBT_BYTE_ARRAY_TAG => BYTE_ARRAY_ID,
+                NBT_INT_ARRAY_TAG => INT_ARRAY_ID,
+                NBT_LONG_ARRAY_TAG => LONG_ARRAY_ID,
+                _ => {
+                    return Err(Error::SerdeError(
+                        "Array supports only `byte`, `int`, and `long`".to_string(),
+                    ));
+                }
             };
 
+            // An array can arrive here as a named compound field (state is
+            // `Named`) or as an element of a list/tuple (state is one of the
+            // list-element variants, e.g. NBT's `TAG_List` of `TAG_Int_Array`
+            // - vanilla vault block entities use exactly this shape for
+            // `rewarded_players`). `parse_state` already knows how to write
+            // the right header for either case - a name, or the enclosing
+            // list/tuple's own type+length bookkeeping - so just delegate to
+            // it here instead of assuming a named field is the only caller.
+            match self.state {
+                State::Named(_)
+                | State::FirstListElement { .. }
+                | State::ListElement
+                | State::CheckedListElement => self.parse_state(id)?,
+                _ => return Err(Error::SerdeError("Invalid `Serializer` state!".to_string())),
+            }
+
             self.state = State::Array {
-                name,
                 array_type: variant,
             };
         } else {
@@ -487,11 +517,11 @@ impl<W: NbtWriteHelper> ser::Serializer for &mut Serializer<W> {
             return Err(Error::LargeLength(len));
         }
 
-        if let State::Array { array_type, .. } = &mut self.state {
-            let (id, expected_tag) = match *array_type {
-                NBT_BYTE_ARRAY_TAG => (BYTE_ARRAY_ID, BYTE_ID),
-                NBT_INT_ARRAY_TAG => (INT_ARRAY_ID, INT_ID),
-                NBT_LONG_ARRAY_TAG => (LONG_ARRAY_ID, LONG_ID),
+        if let State::Array { array_type } = &mut self.state {
+            let expected_tag = match *array_type {
+                NBT_BYTE_ARRAY_TAG => BYTE_ID,
+                NBT_INT_ARRAY_TAG => INT_ID,
+                NBT_LONG_ARRAY_TAG => LONG_ID,
                 _ => {
                     return Err(Error::SerdeError(
                         "Array supports only `byte`, `int`, and `long`".to_string(),
@@ -499,8 +529,9 @@ impl<W: NbtWriteHelper> ser::Serializer for &mut Serializer<W> {
                 }
             };
 
-            self.parse_state(id)?;
-
+            // This array's own tag (and name, or enclosing list header) was
+            // already written by `serialize_newtype_variant` via
+            // `parse_state`; all that's left is this array's own body.
             self.output.write_i32(len as i32)?;
 
             // We can mark anything as an NBT array list, so mark as needed to be checked.
