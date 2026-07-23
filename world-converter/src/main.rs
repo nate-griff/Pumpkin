@@ -1,3 +1,4 @@
+mod nbt_io;
 mod region;
 
 #[tokio::main]
