@@ -1,4 +1,5 @@
 mod convert;
+mod level_dat;
 mod nbt_io;
 mod palette;
 mod region;
@@ -40,5 +41,10 @@ async fn main() {
         for name in &stats.unresolved_names {
             tracing::warn!("  {name}");
         }
+    }
+
+    match level_dat::convert_level_dat(source, dest) {
+        Ok(()) => tracing::info!("level.dat: seed, spawn, difficulty, and game rules carried over"),
+        Err(err) => tracing::error!("level.dat conversion failed: {err}"),
     }
 }
