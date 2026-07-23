@@ -14,6 +14,11 @@ members = [
     "pumpkin-codecs",
     "world-converter"
 ]
+# `cargo run`/`cargo build` invoked at the workspace root with no `-p` target
+# only these members - keeps `cargo run` unambiguously starting the server
+# even though `world-converter` also produces a binary. Run the converter
+# explicitly with `cargo run -p world-converter -- <source> <dest>`.
+default-members = ["pumpkin"]
 exclude = ["pumpkin-codegen"]
 
 [workspace.lints.clippy]
