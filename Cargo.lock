@@ -4927,6 +4927,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "world-converter"
+version = "0.1.0-dev+26.2"
+dependencies = [
+ "bytes",
+ "flate2",
+ "pumpkin-config",
+ "pumpkin-data",
+ "pumpkin-nbt",
+ "pumpkin-util",
+ "pumpkin-world",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

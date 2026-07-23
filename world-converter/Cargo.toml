@@ -1,0 +1,28 @@
+[package]
+name = "world-converter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "world-converter"
+path = "src/main.rs"
+
+[dependencies]
+pumpkin-world.workspace = true
+pumpkin-nbt.workspace = true
+pumpkin-util.workspace = true
+pumpkin-config.workspace = true
+pumpkin-data = { workspace = true, features = ["default"] }
+
+bytes.workspace = true
+flate2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "fs", "io-util", "sync"] }
+
+[lints]
+workspace = true
